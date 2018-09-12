@@ -60,8 +60,9 @@ type RoomServer struct {
 	RedisClient *RedisClient
 }
 
-func (rs *RoomServer) Init() {
-	rs.RedisClient = NewRedisClient()
+func NewRoomServer(redisClient *RedisClient) *RoomServer{
+	roomServer := &RoomServer{redisClient}
+	return roomServer
 }
 
 func (rs *RoomServer) Run(p int, tls bool) {

@@ -16,7 +16,6 @@ func main() {
 	log.Printf("Starting roomServer: tls = %t, port = %d, collider=%s", *tls, *port, *colliderSrv)
 	redisClient := NewRedisClient()
 	//(*redisClient.RedisConn).Do("MULTI")
-	roomServer := &RoomServer{RedisClient: redisClient}
-	roomServer.Init()
+	roomServer := NewRoomServer(redisClient)
 	roomServer.Run(*port, *tls)
 }
