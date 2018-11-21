@@ -21,7 +21,7 @@ func NewRedisClient() *RedisClient {
 	return &RedisClient{protocol: RedisProtocol, host: RedisHost, port: RedisPort, redisConn: &c}
 }
 
-func (redisClient *RedisClient) getRedisConnNotNil() redis.Conn {
+func (redisClient *RedisClient) GetRedisConnNotNil() redis.Conn {
 	if redisClient.redisConn == nil {
 		log.Println("redis connection is nil error")
 		return nil
@@ -30,5 +30,5 @@ func (redisClient *RedisClient) getRedisConnNotNil() redis.Conn {
 }
 
 func (redisClient *RedisClient) close() {
-	redisClient.getRedisConnNotNil().Close()
+	redisClient.GetRedisConnNotNil().Close()
 }

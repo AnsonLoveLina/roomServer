@@ -3,7 +3,9 @@ package main
 import (
 	"flag"
 	"log"
-	. "../roomServer"
+	//. "../roomServer"
+	//"github.com/garyburd/redigo/redis"
+	"fmt"
 )
 
 var tls = flag.Bool("tls", true, "whether TLS is used")
@@ -14,8 +16,20 @@ func main() {
 	flag.Parse()
 
 	log.Printf("Starting roomServer: tls = %t, port = %d, collider=%s", *tls, *port, *colliderSrv)
-	redisClient := NewRedisClient()
-	//(*redisClient.RedisConn).Do("MULTI")
-	roomServer := NewRoomServer(redisClient)
-	roomServer.Run(*port, *tls)
+	var a map[string]string
+	a = make(map[string]string)
+	fmt.Println(a["1"])
+	//redisClient := NewRedisClient()
+	//redisCon := redisClient.GetRedisConnNotNil()
+	//fmt.Println(redisCon.Do("WATCH", "roomid111"))
+	//if roomValue, error := redis.StringMap(redisCon.Do("HGETALL", "roomid111")); error == nil {
+	//	fmt.Println(roomValue)
+	//	occupancy := len(roomValue)
+	//	fmt.Printf("occupancy:%d \n", occupancy)
+	//}else {
+	//	fmt.Println(error)
+	//}
+	//fmt.Println(redisCon.Do("MULTI"))
+	//fmt.Println(redisCon.Do("HSETNX", "roomid111", "clientid111", "clientid111Json"))
+	//fmt.Println(redisCon.Do("EXEC"))
 }

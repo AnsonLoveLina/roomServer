@@ -4,8 +4,8 @@ import "os"
 
 var (
 	RedisProtocol                       = "tcp"
-	RedisHost                           = "localhost"
-	RedisPort                           = "32768"
+	RedisHost                           = "192.168.1.95"
+	RedisPort                           = "6379"
 	ICE_SERVER_BASE_URL                 = "https://networktraversal.googleapis.com"
 	ICE_SERVER_URL_TEMP                 = "%s/v1alpha/iceconfig?key=%s"
 	ICE_SERVER_API_KEY                  = os.ExpandEnv("$ICE_SERVER_API_KEY")

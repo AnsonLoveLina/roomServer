@@ -9,8 +9,10 @@ import (
 	"log"
 	"encoding/json"
 	"strings"
-	. "../common"
+	. "./src/common"
+	. "./src/roomServer"
 	"net/url"
+	"github.com/garyburd/redigo/redis"
 )
 
 type ResponseType int
@@ -40,7 +42,7 @@ func (resp ResponseType) getString() string {
 }
 
 type Room struct {
-	Clients map[int]*Client `json:"clients"`
+	Clients map[string]string `json:"clients"`
 }
 
 type Client struct {
@@ -53,14 +55,14 @@ func NewClient(isInitiator bool) *Client {
 }
 
 func NewRoom() *Room {
-	return &Room{Clients: make(map[int]*Client)}
+	return &Room{Clients: make(map[string]string)}
 }
 
 type RoomServer struct {
 	RedisClient *RedisClient
 }
 
-func NewRoomServer(redisClient *RedisClient) *RoomServer{
+func NewRoomServer(redisClient *RedisClient) *RoomServer {
 	roomServer := &RoomServer{redisClient}
 	return roomServer
 }
@@ -74,7 +76,7 @@ func (rs *RoomServer) Run(p int, tls bool) {
 
 func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 	roomid := mux.Vars(r)["roomid"]
-	clientid := rand.Int()
+	clientid := string(rand.Int())
 
 	result := rs.addClient2Room(r, roomid, clientid)
 	if result.error != "" {
@@ -95,66 +97,82 @@ type result struct {
 	room        Room     `json:"room_state"`
 }
 
-func (rs *RoomServer) addClient2Room(request *http.Request, roomid string, clientid int) (result) {
+func (rs *RoomServer) addClient2Room(request *http.Request, roomid string, clientid string) (result) {
+	//先用clientid作为redis的clientKey
+	var clientKey = clientid
 	var isInitiator = false
 	var messages = make([]string, roomMaxOccupancy)
-	var error = ""
 	//roomKey := fmt.Sprintf("%s/%s", request.URL.Host, roomid)
-	var room Room
 	var occupancy int
-	var roomValue interface{}
-	var redisCon = rs.RedisClient.getRedisConnNotNil()
+	var roomValue map[string]string
+	var room Room
+	var error error
+	var redisCon = rs.RedisClient.GetRedisConnNotNil()
 
-	roomValue, _ = redisCon.Do("HGET", roomid, clientid)
-	redisCon.Do("WHATCH", roomid)
-	_, err := redisCon.Do("MULTI")
-	if err != nil {
-		error = redisError.getString()
-		return result{error: error}
+	if result, error := redis.String(redisCon.Do("WATCH", roomid)); error != nil || result != "OK" {
+		log.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, error)
 	}
-	if roomValue == nil {
-		room = *NewRoom()
-		_, err := redisCon.Do("HMSET", roomid, clientid, room)
-		if err != nil {
-			error = redisError.getString()
-			return result{error: error}
+	for ; true; {
+		if roomValue, error = redis.StringMap(redisCon.Do("HGETALL", roomid)); error != nil {
+			log.Printf("command:HGETALL %s , error:%s", roomid, error)
+			break
 		}
-	} else {
-		roomValue = roomValue.([]string)
-	}
-	occupancy = len(room.Clients)
+		room = Room{Clients: roomValue}
+		//json.Unmarshal(roomValue,clients)
+		occupancy = len(roomValue)
 
-	if occupancy >= roomMaxOccupancy {
-		error = roomFull.getString()
-		return result{error: error}
-	}
-	if room.Clients[clientid] != nil {
-		error = duplicateClient.getString()
-		return result{error: error}
-	}
-
-	if occupancy == 0 { //the first client of this room
-		isInitiator = true
-		room.Clients[clientid] = NewClient(isInitiator)
-	} else {
-		isInitiator = false
-		otherClients := room.Clients
-		var i = 0
-		for _, client := range otherClients {
-			messages[i] = client.Message
-			i++
-			client.Message = ""
+		if occupancy >= roomMaxOccupancy {
+			return result{error: roomFull.getString()}
 		}
-		room.Clients[clientid] = NewClient(isInitiator)
+		if value := roomValue[clientid]; value != "" {
+			return result{error: duplicateClient.getString()}
+		}
+
+		var client string
+		if occupancy == 0 { //the first client of this room
+			isInitiator = true
+			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
+				client = string(newClient[:])
+				room = Room{Clients: map[string]string{clientid: client}}
+			} else {
+				log.Println(error)
+				break
+			}
+		} else {
+			isInitiator = false
+			var i = 0
+			for _, clientJson := range roomValue {
+				var otherClient Client
+				json.Unmarshal([]byte(clientJson), otherClient)
+				messages[i] = otherClient.Message
+				i++
+				//是否应该clean client message
+				otherClient.Message = ""
+			}
+			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
+				client = string(newClient[:])
+				room.Clients[clientid] = client
+			} else {
+				log.Println(error)
+				break
+			}
+		}
+
+		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
+			log.Printf("command:MULTI , result:%s , error:%s", result, error)
+			break
+		}
+		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, client)); error != nil || result != "QUEUED" {
+			log.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, client, result, error)
+			break
+		}
+		if result, error := redisCon.Do("EXEC"); error != nil || result == nil {
+			log.Printf("command:EXEC , result:%d , error:%s", result, error)
+			break
+		}
 	}
 
-	var _, er = redisCon.Do("EXEC")
-	if er != nil {
-		error = redisError.getString()
-		return result{error: error}
-	}
-
-	return result{error, isInitiator, messages, room}
+	return result{"", isInitiator, messages, room}
 }
 
 func writeResponse(rw http.ResponseWriter, result string, params map[string]interface{}, messages []string) {
@@ -177,7 +195,7 @@ func get_hd_default(userAgent string) bool {
 	return true
 }
 
-func getRoomParameters(request *http.Request, roomid string, clientid int, isInitiator interface{}) (map[string]interface{}) {
+func getRoomParameters(request *http.Request, roomid string, clientid string, isInitiator interface{}) (map[string]interface{}) {
 	var warningMessages = make([]string, 10)
 	var message string
 	userAgent := request.UserAgent()
@@ -255,7 +273,7 @@ func getRoomParameters(request *http.Request, roomid string, clientid int, isIni
 		roomLink = newRoomURL.Path
 		params["room_link"] = roomLink
 	}
-	if clientid != 0 {
+	if clientid != "" {
 		params["client_id"] = clientid
 	}
 	if isInitiator != nil {
