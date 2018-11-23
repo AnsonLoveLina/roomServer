@@ -6,11 +6,9 @@ import (
 	"math/rand"
 	"fmt"
 	"strconv"
-	"log"
 	"encoding/json"
 	"strings"
-	. "./src/common"
-	. "./src/roomServer"
+	. "common"
 	"net/url"
 	"github.com/garyburd/redigo/redis"
 )
@@ -33,7 +31,7 @@ func (resp ResponseType) getString() string {
 	case redisError:
 		return "redisError"
 	case roomFull:
-		return "room is full"
+		return "Room is full"
 	case duplicateClient:
 		return "duplicate client"
 	default:
@@ -59,11 +57,10 @@ func NewRoom() *Room {
 }
 
 type RoomServer struct {
-	RedisClient *RedisClient
 }
 
-func NewRoomServer(redisClient *RedisClient) *RoomServer {
-	roomServer := &RoomServer{redisClient}
+func NewRoomServer() *RoomServer {
+	roomServer := &RoomServer{}
 	return roomServer
 }
 
@@ -78,26 +75,28 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 	roomid := mux.Vars(r)["roomid"]
 	clientid := string(rand.Int())
 
-	result := rs.addClient2Room(r, roomid, clientid)
-	if result.error != "" {
-		log.Println("Error adding client to room: %s, room_state=%s",
-			result.error, result.room)
-		writeResponse(rw, result.error, make(map[string]interface{}), make([]string, 0))
+	result := rs.AddClient2Room(roomid, clientid)
+	if result.Error != "" {
+		Error.Printf("Error adding client to Room: %s, room_state=%s",
+			result.Error, result.Room)
+		writeResponse(rw, result.Error, make(map[string]interface{}), make([]string, 0))
 		return
 	}
 
-	params := getRoomParameters(r, roomid, clientid, result.isInitiator)
-	writeResponse(rw, "SUCCESS", params, result.messages)
+	params := getRoomParameters(r, roomid, clientid, result.IsInitiator)
+	writeResponse(rw, "SUCCESS", params, result.Messages)
 }
 
 type result struct {
-	error       string   `json:"error"`
-	isInitiator bool     `json:"IsInitiator"`
-	messages    []string `json:"messages"`
-	room        Room     `json:"room_state"`
+	Error       string   `json:"error"`
+	IsInitiator bool     `json:"IsInitiator"`
+	Messages    []string `json:"Messages"`
+	Room        Room     `json:"room_state"`
 }
 
-func (rs *RoomServer) addClient2Room(request *http.Request, roomid string, clientid string) (result) {
+var errorBreakMax = 10
+
+func (rs *RoomServer) AddClient2Room(roomid string, clientid string) (result) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
 	var isInitiator = false
@@ -106,37 +105,45 @@ func (rs *RoomServer) addClient2Room(request *http.Request, roomid string, clien
 	var occupancy int
 	var roomValue map[string]string
 	var room Room
-	var error error
-	var redisCon = rs.RedisClient.GetRedisConnNotNil()
-
-	if result, error := redis.String(redisCon.Do("WATCH", roomid)); error != nil || result != "OK" {
-		log.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, error)
-	}
-	for ; true; {
+	var redisCon = RedisClient.Get()
+	defer redisCon.Close()
+	var errorMessage = fmt.Sprintf("error client: %s to Room: %s add", clientid, roomid)
+	for i := 0; ; i++ {
+		if result, error := redis.String(redisCon.Do("WATCH", roomid)); error != nil || result != "OK" {
+			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, error)
+			if i < errorBreakMax {
+				break
+			}
+		}
+		var error error
 		if roomValue, error = redis.StringMap(redisCon.Do("HGETALL", roomid)); error != nil {
-			log.Printf("command:HGETALL %s , error:%s", roomid, error)
-			break
+			Error.Printf("command:HGETALL %s , error:%s", roomid, error)
+			if i < errorBreakMax {
+				break
+			}
 		}
 		room = Room{Clients: roomValue}
 		//json.Unmarshal(roomValue,clients)
 		occupancy = len(roomValue)
 
 		if occupancy >= roomMaxOccupancy {
-			return result{error: roomFull.getString()}
+			return result{Error: roomFull.getString()}
 		}
 		if value := roomValue[clientid]; value != "" {
-			return result{error: duplicateClient.getString()}
+			return result{Error: duplicateClient.getString()}
 		}
 
 		var client string
-		if occupancy == 0 { //the first client of this room
+		if occupancy == 0 { //the first client of this Room
 			isInitiator = true
 			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
 				client = string(newClient[:])
 				room = Room{Clients: map[string]string{clientid: client}}
 			} else {
-				log.Println(error)
-				break
+				Error.Println(error)
+				if i < errorBreakMax {
+					break
+				}
 			}
 		} else {
 			isInitiator = false
@@ -153,35 +160,48 @@ func (rs *RoomServer) addClient2Room(request *http.Request, roomid string, clien
 				client = string(newClient[:])
 				room.Clients[clientid] = client
 			} else {
-				log.Println(error)
-				break
+				Error.Println(error)
+				if i < errorBreakMax {
+					break
+				}
 			}
 		}
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
-			log.Printf("command:MULTI , result:%s , error:%s", result, error)
-			break
+			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
+			if i < errorBreakMax {
+				break
+			}
 		}
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, client)); error != nil || result != "QUEUED" {
-			log.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, client, result, error)
-			break
+			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, client, result, error)
+			if i < errorBreakMax {
+				break
+			}
 		}
-		if result, error := redisCon.Do("EXEC"); error != nil || result == nil {
-			log.Printf("command:EXEC , result:%d , error:%s", result, error)
+		if result, error := redisCon.Do("EXEC"); error != nil {
+			Error.Printf("command:EXEC , result:%d , error:%s", result, error)
+			if i < errorBreakMax {
+				break
+			}
+		} else if result != nil {
+			Info.Printf("success client: %s to Room: %s add", clientid, roomid)
+			errorMessage = ""
 			break
+		} else {
+			Info.Printf("db cas cause bad client: %s to Room: %s add.system will retry!", clientid, roomid)
 		}
 	}
-
-	return result{"", isInitiator, messages, room}
+	return result{errorMessage, isInitiator, messages, room}
 }
 
 func writeResponse(rw http.ResponseWriter, result string, params map[string]interface{}, messages []string) {
-	params["messages"] = messages
+	params["Messages"] = messages
 	responseObj := map[string]interface{}{"result": result, "params": params}
 	response, error := json.Marshal(responseObj)
 	if error != nil {
-		err := fmt.Sprintf("json marshal error %s result:%s,params:%s,messages:%s", error.Error(), result, params, messages)
-		log.Println(err)
+		err := fmt.Sprintf("json marshal error %s result:%s,params:%s,Messages:%s", error.Error(), result, params, messages)
+		Error.Panicln(err)
 		response, _ = json.Marshal(map[string]interface{}{"result": err, "params": make(map[string]interface{})})
 	}
 	rw.Write(response)
@@ -218,7 +238,7 @@ func getRoomParameters(request *http.Request, roomid string, clientid string, is
 
 	if hd != "" && video != "" {
 		message = "The \"hd\" parameter has overridden video=" + video
-		log.Println(message)
+		Info.Println(message)
 		warningMessages = append(warningMessages, message)
 	}
 	if hd == "true" {
@@ -229,7 +249,7 @@ func getRoomParameters(request *http.Request, roomid string, clientid string, is
 
 	if request.Form.Get("minre") != "" || request.Form.Get("maxre") != "" {
 		message = "The \"minre\" and \"maxre\" parameters are no longer supported. Use \"video\" instead."
-		log.Println(message)
+		Info.Println(message)
 		warningMessages = append(warningMessages, message)
 	}
 
@@ -340,7 +360,7 @@ func makeMediaStreamConstraints(audio string, video string, firefoxFakeDevice st
 	if firefoxFakeDevice != "" {
 		stream_constraints["fake"] = true
 	}
-	log.Printf("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
+	Info.Printf("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
 	return stream_constraints
 }
 
