@@ -9,8 +9,8 @@ import (
 	"encoding/json"
 	"strings"
 	. "common"
-	"net/url"
 	"github.com/garyburd/redigo/redis"
+	"io/ioutil"
 )
 
 type ResponseType int
@@ -66,14 +66,30 @@ func NewRoomServer() *RoomServer {
 
 func (rs *RoomServer) Run(p int, tls bool) {
 	router := mux.NewRouter().StrictSlash(true)
-	router.HandleFunc("/join/{roomid+}", rs.joinRoomHandler).Methods("POST")
+	router.HandleFunc("/join/{roomid}", rs.joinRoomHandler).Methods("POST")
 
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(p), router)
 }
 
+func GetRequestJson(r *http.Request) map[string]string {
+	body, _ := ioutil.ReadAll(r.Body)
+	requestJson := make(map[string]string)
+	r.Body.Close()
+	if err := json.Unmarshal(body, &requestJson); err == nil {
+		Info.Println(requestJson)
+	} else {
+		Error.Println(err)
+	}
+	return requestJson
+}
+
 func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 	roomid := mux.Vars(r)["roomid"]
-	clientid := string(rand.Int())
+	var clientid = strconv.Itoa(rand.Int())
+	requestJson := GetRequestJson(r)
+	if requestJson["clientid"] != "" {
+		clientid = requestJson["clientid"]
+	}
 
 	result := rs.AddClient2Room(roomid, clientid)
 	if result.Error != "" {
@@ -83,7 +99,7 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := getRoomParameters(r, roomid, clientid, result.IsInitiator)
+	params := getRoomParameters(r, requestJson, roomid, clientid, result.IsInitiator)
 	writeResponse(rw, "SUCCESS", params, result.Messages)
 }
 
@@ -215,26 +231,25 @@ func get_hd_default(userAgent string) bool {
 	return true
 }
 
-func getRoomParameters(request *http.Request, roomid string, clientid string, isInitiator interface{}) (map[string]interface{}) {
+func getRoomParameters(request *http.Request, requestJson map[string]string, roomid string, clientid string, isInitiator interface{}) (map[string]interface{}) {
 	var warningMessages = make([]string, 10)
 	var message string
 	userAgent := request.UserAgent()
-	request.ParseForm()
-	iceTransports := request.Form.Get("it")
-	iceServerTransports := request.Form.Get("tt")
+	iceTransports := requestJson["it"]
+	iceServerTransports := requestJson["tt"]
 	var iceServerBaseUrl string
-	if request.Form.Get("ts") != "" {
-		iceServerBaseUrl = request.Form.Get("ts")
+	if requestJson["ts"] != "" {
+		iceServerBaseUrl = requestJson["ts"]
 	} else {
 		iceServerBaseUrl = ICE_SERVER_BASE_URL
 	}
 
-	audio := request.Form.Get("audio")
-	video := request.Form.Get("video")
+	audio := requestJson["audio"]
+	video := requestJson["video"]
 
-	firefoxFakeDevice := request.Form.Get("firefox_fake_device")
+	firefoxFakeDevice := requestJson["firefox_fake_device"]
 
-	hd := strings.ToLower(request.Form.Get("hd"))
+	hd := strings.ToLower(requestJson["hd"])
 
 	if hd != "" && video != "" {
 		message = "The \"hd\" parameter has overridden video=" + video
@@ -247,15 +262,15 @@ func getRoomParameters(request *http.Request, roomid string, clientid string, is
 		video = "optional:minWidth=1280,optional:minHeight=720"
 	}
 
-	if request.Form.Get("minre") != "" || request.Form.Get("maxre") != "" {
+	if requestJson["minre"] != "" || requestJson["maxre"] != "" {
 		message = "The \"minre\" and \"maxre\" parameters are no longer supported. Use \"video\" instead."
 		Info.Println(message)
 		warningMessages = append(warningMessages, message)
 	}
 
-	dtls := request.Form.Get("dtls")
-	dscp := request.Form.Get("dscp")
-	ipv6 := request.Form.Get("ipv6")
+	dtls := requestJson["dtls"]
+	dscp := requestJson["dscp"]
+	ipv6 := requestJson["ipv6"]
 
 	var iceServerUrl = ""
 	if len(iceServerBaseUrl) > 0 {
@@ -267,7 +282,7 @@ func getRoomParameters(request *http.Request, roomid string, clientid string, is
 	pcConstraints := makePcConstraints(dtls, dscp, ipv6)
 	offer_options := struct{}{}
 	mediaConstraints := makeMediaStreamConstraints(audio, video, firefoxFakeDevice)
-	wssUrl, wssPostUrl := getWssParameters(request)
+	wssUrl, wssPostUrl := getWssParameters(requestJson)
 
 	bypassJoinConfirmation := false
 	params := map[string]interface{}{
@@ -288,9 +303,7 @@ func getRoomParameters(request *http.Request, roomid string, clientid string, is
 
 	if roomid != "" {
 		params["room_id"] = roomid
-		roomLink := request.URL.Host + "/r/" + roomid
-		newRoomURL := url.URL{Host: roomLink, RawQuery: request.URL.Query().Encode()}
-		roomLink = newRoomURL.Path
+		roomLink := request.Host + "/r/" + roomid + "?" + request.URL.Query().Encode()
 		params["room_link"] = roomLink
 	}
 	if clientid != "" {
@@ -306,9 +319,9 @@ func getVersionInfo() interface{} {
 	return map[string]interface{}{"gitHash": "", "time": "", "branch": ""}
 }
 
-func getWssParameters(request *http.Request) (wssUrl string, wssPostUrl string) {
-	wssHostPortPair := request.Form.Get("wshpp")
-	wssTls := request.Form.Get("wstls")
+func getWssParameters(requestJson map[string]string) (wssUrl string, wssPostUrl string) {
+	wssHostPortPair := requestJson["wshpp"]
+	wssTls := requestJson["wstls"]
 	if wssHostPortPair == "" {
 		wssHostPortPair = WSS_INSTANCES[0][WSS_INSTANCE_HOST_KEY]
 	}
@@ -324,7 +337,7 @@ func getWssParameters(request *http.Request) (wssUrl string, wssPostUrl string) 
 }
 
 func makeMediaTrackConstraints(constraints string) (trackConstraints interface{}) {
-	if constraints != "" || strings.ToLower(constraints) == "true" {
+	if constraints == "" || strings.ToLower(constraints) == "true" {
 		trackConstraints = true
 	} else if strings.ToLower(constraints) == "false" {
 		trackConstraints = false
@@ -344,7 +357,7 @@ func makeMediaTrackConstraints(constraints string) (trackConstraints interface{}
 				trackConstraints["mandatory"] = map[string]interface{}{tokens[0]: tokens[1]}
 			} else {
 				optional := trackConstraints["optional"].([]map[string]interface{})
-				optional[len(optional)] = map[string]interface{}{tokens[0]: tokens[1]}
+				optional = append(optional, map[string]interface{}{tokens[0]: tokens[1]})
 			}
 		}
 	}
@@ -365,19 +378,18 @@ func makeMediaStreamConstraints(audio string, video string, firefoxFakeDevice st
 }
 
 func makePcConstraints(dtls string, dscp string, ipv6 string) interface{} {
-
 	var optionals = make([]map[string]bool, 0)
 	dtlsValue, dtlsError := strconv.ParseBool(dtls)
-	if dtlsError != nil {
-		optionals[len(optionals)] = map[string]bool{"DtlsSrtpKeyAgreement": dtlsValue}
+	if dtlsError == nil {
+		optionals = append(optionals, map[string]bool{"DtlsSrtpKeyAgreement": dtlsValue})
 	}
 	dscpValue, dscpError := strconv.ParseBool(dscp)
-	if dscpError != nil {
-		optionals[len(optionals)] = map[string]bool{"googDscp": dscpValue}
+	if dscpError == nil {
+		optionals = append(optionals, map[string]bool{"googDscp": dscpValue})
 	}
 	ipv6Value, ipv6Error := strconv.ParseBool(ipv6)
-	if ipv6Error != nil {
-		optionals[len(optionals)] = map[string]bool{"googIPv6": ipv6Value}
+	if ipv6Error == nil {
+		optionals = append(optionals, map[string]bool{"googIPv6": ipv6Value})
 	}
 
 	return struct {

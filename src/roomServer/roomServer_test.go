@@ -9,6 +9,13 @@ import (
 	"testing"
 )
 
+func TestMakePcConstraints(t *testing.T){
+	result := makePcConstraints("False","True","True")
+	fmt.Println(result)
+	jsonByte,_ :=json.Marshal(result)
+	fmt.Println(string(jsonByte))
+}
+
 func TestRoomServer_AddClient2Room(t *testing.T) {
 	roomServer := NewRoomServer()
 	roomid := "roomid"
