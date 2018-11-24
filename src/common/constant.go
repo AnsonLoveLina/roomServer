@@ -3,6 +3,7 @@ package common
 import "os"
 
 var (
+	NIL_DEFAULT_PARAM                   = "none"
 	RedisProtocol                       = "tcp"
 	RedisHost                           = "192.168.1.95"
 	RedisPort                           = "6379"
@@ -14,12 +15,21 @@ var (
 	WSS_INSTANCE_NAME_KEY               = "vm_name"
 	WSS_INSTANCE_ZONE_KEY               = "zone"
 	WSS_INSTANCES                       = []map[string]string{{
-		WSS_INSTANCE_HOST_KEY: "192.168.1.5:8089",
+		WSS_INSTANCE_HOST_KEY: "192.168.1.56:8089",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-a",
 	}, {
-		WSS_INSTANCE_HOST_KEY: "192.168.1.5:8089",
+		WSS_INSTANCE_HOST_KEY: "192.168.1.56:8089",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std-2",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-f",
 	}}
+
+	RESPONSE_UNKNOWN_ROOM = "UNKNOWN_ROOM"
+	RESPONSE_UNKNOWN_CLIENT = "UNKNOWN_CLIENT"
 )
+
+func init() {
+	if ICE_SERVER_API_KEY == "" {
+		ICE_SERVER_API_KEY = NIL_DEFAULT_PARAM
+	}
+}
