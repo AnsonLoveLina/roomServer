@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"errors"
 	"github.com/garyburd/redigo/redis"
+	"github.com/sirupsen/logrus"
 )
 
 type ResponseType int
@@ -138,7 +139,7 @@ func GetRequestJson(r *http.Request) (map[string]interface{}, string) {
 	requestJson := make(map[string]interface{})
 	r.Body.Close()
 	if err := json.Unmarshal(body, &requestJson); err != nil {
-		Error.Printf("json:%s unmarshal error:%s", string(body), err)
+		logrus.WithFields(logrus.Fields{"json": string(body), "error": err}).Error("json unmarshal error")
 		//} else {
 		//	Info.Println(requestJson)
 	}

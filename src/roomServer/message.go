@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"github.com/sirupsen/logrus"
 )
 
 type messageResult struct {
@@ -32,23 +33,23 @@ func (rs *RoomServer) messageRoomHandler(rw http.ResponseWriter, r *http.Request
 }
 
 func sendMessageToCollider(rw http.ResponseWriter, roomid, clientid string, requestJson map[string]interface{}, requestBody string) {
-	Info.Printf("Forwarding message to collider for room %s client %s", roomid, clientid)
+	logrus.WithFields(logrus.Fields{"room": roomid, "clientid": clientid}).Info("Forwarding message to collider")
 	_, wssPostUrl := getWssParameters(requestJson)
 	url := wssPostUrl + "/" + roomid + "/" + clientid
 	req, err := http.NewRequest("POST", url, strings.NewReader(requestBody))
 	if err != nil {
-		Error.Printf("Failed to send message to collider: %s", err)
+		logrus.WithFields(logrus.Fields{"err": err}).Error("Failed to send message to collider")
 		return
 	}
 	client := &http.Client{}
 	response, err := client.Do(req)
 	if err != nil {
-		Error.Printf("Failed to send message to collider: %s", err)
+		logrus.WithFields(logrus.Fields{"err": err}).Error("Failed to send message to collider")
 		return
 	}
 
 	if response.StatusCode != 200 {
-		Error.Printf("Failed to send message to collider: %d", response.StatusCode)
+		logrus.WithFields(logrus.Fields{"StatusCode": response.StatusCode}).Error("Failed to send message to collider")
 		return
 	}
 
@@ -64,17 +65,17 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 	for i := 0; ; i++ {
 		var error error
 		if result, err := redis.String(redisCon.Do("WATCH", roomid)); err != nil || result != "OK" {
-			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, err)
+			logrus.WithFields(logrus.Fields{"result": result, "error": err}).Errorf("command:WATCH %s", roomid)
 			goto continueFlag
 		}
 		if roomValue, error = ClientMap(redisCon.Do("HGETALL", roomid)); error != nil {
-			Error.Printf("command:HGETALL %s , error:%s", roomid, error)
+			logrus.WithFields(logrus.Fields{"result": roomValue, "error": error}).Errorf("HGETALL:WATCH %s", roomid)
 			goto continueFlag
 		} else if roomValue == nil {
-			Warn.Printf("Unknow room:%s", roomid)
+			logrus.WithFields(logrus.Fields{"roomid": roomid}).Warn("Unknow room")
 			return messageResult{RESPONSE_UNKNOWN_ROOM, false}
 		} else if roomValue[clientKey] == nil {
-			Warn.Printf("Unknow client:%s", clientKey)
+			logrus.WithFields(logrus.Fields{"clientKey": clientKey}).Warn("Unknow client")
 			return messageResult{RESPONSE_UNKNOWN_CLIENT, false}
 		} else if len(roomValue) >= roomMaxOccupancy {
 			return messageResult{"", false}
@@ -86,25 +87,25 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 		}
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
-			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:MULTI")
 			goto continueFlag
 		}
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
-			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Errorf("command:HSETNX %s %s %s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))
 			goto continueFlag
 		}
 		if result, error := redisCon.Do("EXEC"); error != nil {
-			Error.Printf("command:EXEC , result:%d , error:%s", result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
 			goto continueFlag
 		} else if result != nil {
-			Info.Printf("success client: %s to Room: %s add,retries:%d!", clientKey, roomid, i)
+			logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid, "retries": i}).Info("client success message to the room")
 			return messageResult{"", true}
 		} else {
 			goto continueFlag
 		}
 
 	continueFlag:
-		Info.Printf("db cas cause bad client: %s to Room: %s message", clientKey, roomid)
+		logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid}).Info("db cas cause client bad message to the room")
 		if i < errorBreakMax {
 			break
 		} else {
@@ -119,9 +120,9 @@ func messageWriteResponse(rw http.ResponseWriter, result string) {
 	response, error := json.Marshal(responseObj)
 	if error != nil {
 		err := fmt.Sprintf("json marshal error %s result:%s", error.Error(), result)
-		Error.Panicln(err)
+		logrus.WithFields(logrus.Fields{"result": result, "error": error.Error()}).Error("json marshal error")
 		response, _ = json.Marshal(map[string]interface{}{"result": err, "params": make(map[string]interface{})})
 	}
-	Debug.Printf("message response:%s", string(response))
+	logrus.WithFields(logrus.Fields{"response": string(response)}).Debug("message success response")
 	rw.Write(response)
 }

@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"math/rand"
 	"encoding/json"
-	. "common"
 	"testing"
+	log "github.com/sirupsen/logrus"
 )
 
 func Test(t *testing.T){
-	a := map[string]interface{}{"gitHash": "", "time": "", "branch": ""}
-	fmt.Println(JsonByte(json.Marshal(a)))
-
+	fmt.Println(fmt.Sprintf("xx"))
 }
 
 func TestAddClient2Room(t *testing.T) {
@@ -25,7 +23,7 @@ func TestAddClient2Room(t *testing.T) {
 			time.Sleep(time.Duration(sleepS) * time.Second)
 			result := AddClient2Room(roomid, fmt.Sprintf("clientid%d", i))
 			if value, error := json.Marshal(result); error == nil {
-				Info.Printf(string(value))
+				log.Info(string(value))
 			}
 			complate <- 1
 		}(i)

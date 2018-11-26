@@ -1,12 +1,14 @@
 package common
 
+import "github.com/sirupsen/logrus"
+
 func Interface2string(o interface{}, defaultString string) string {
 	if o == nil {
 		return ""
 	}
 	result, err := o.(string)
 	if err {
-		Error.Printf("source:%s can not transform to string,use defaultResult:%s", o, defaultString)
+		logrus.WithFields(logrus.Fields{"source": o, "defaultString": defaultString}).Error("source can not transform to string,with the defaultResult")
 		return defaultString
 	} else {
 		return result

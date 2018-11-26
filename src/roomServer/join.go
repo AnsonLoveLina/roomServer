@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	. "common"
 	"github.com/garyburd/redigo/redis"
+	"github.com/sirupsen/logrus"
 )
 
 func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
@@ -23,8 +24,7 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 
 	result := AddClient2Room(roomid, clientid)
 	if result.Error != "" {
-		Error.Printf("Error adding client to Room: %s",
-			result.Error)
+		logrus.WithFields(logrus.Fields{"error": result.Error}).Error("Error adding client to Room")
 		joinWriteResponse(rw, result.Error, make(map[string]interface{}), make([]string, 0))
 		return
 	}
@@ -55,11 +55,11 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 	for i := 0; ; i++ {
 		var error error
 		if result, err := redis.String(redisCon.Do("WATCH", roomid)); err != nil || result != "OK" {
-			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, err)
+			logrus.WithFields(logrus.Fields{"result": result, "error": err}).Errorf("command:WATCH %s", roomid)
 			goto continueFlag
 		}
 		if roomValue, error = ClientMap(redisCon.Do("HGETALL", roomid)); error != nil {
-			Error.Printf("command:HGETALL %s , error:%s", roomid, error)
+			logrus.WithFields(logrus.Fields{"error": error}).Errorf("command:HGETALL %s", roomid)
 			goto continueFlag
 		}
 		room = Room{Clients: roomValue}
@@ -88,25 +88,25 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 		roomValue[clientKey] = NewClient(isInitiator)
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
-			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:MULTI")
 			goto continueFlag
 		}
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
-			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Errorf("command:HSETNX %s %s %s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))
 			goto continueFlag
 		}
 		if result, error := redisCon.Do("EXEC"); error != nil {
-			Error.Printf("command:EXEC , result:%d , error:%s", result, error)
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
 			goto continueFlag
 		} else if result != nil {
-			Info.Printf("success client: %s to Room: %s add , retries:%d!", clientKey, roomid, i)
+			logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid, "retries": i}).Info("client success join to the room")
 			return joinResult{"", isInitiator, messages, room}
 		} else {
 			goto continueFlag
 		}
 
 	continueFlag:
-		Info.Printf("db cas cause bad client: %s to Room: %s join", clientKey, roomid)
+		logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid}).Info("db cas cause client bad join to the room")
 		if i < errorBreakMax {
 			break
 		} else {
@@ -122,7 +122,7 @@ func joinWriteResponse(rw http.ResponseWriter, result string, params map[string]
 	response, error := json.Marshal(responseObj)
 	if error != nil {
 		err := fmt.Sprintf("json marshal error %s result:%s,params:%s,Messages:%s", error.Error(), result, params, messages)
-		Error.Panicln(err)
+		logrus.WithFields(logrus.Fields{"result": result, "params": params, "messages": messages, "error": error.Error()}).Error("json marshal error")
 		response, _ = json.Marshal(map[string]interface{}{"result": err, "params": make(map[string]interface{})})
 	}
 	rw.Write(response)
@@ -150,7 +150,7 @@ func getRoomParameters(request *http.Request, requestJson map[string]interface{}
 
 	if hd != "" && video != "" {
 		message = "The \"hd\" parameter has overridden video=" + video
-		Info.Println(message)
+		logrus.Info(message)
 		warningMessages = append(warningMessages, message)
 	}
 	if hd == "true" {
@@ -161,7 +161,7 @@ func getRoomParameters(request *http.Request, requestJson map[string]interface{}
 
 	if requestJson["minre"] != nil || requestJson["maxre"] != nil {
 		message = "The \"minre\" and \"maxre\" parameters are no longer supported. Use \"video\" instead."
-		Info.Println(message)
+		logrus.Info(message)
 		warningMessages = append(warningMessages, message)
 	}
 
@@ -262,7 +262,7 @@ func makeMediaStreamConstraints(audio string, video string, firefoxFakeDevice st
 	if firefoxFakeDevice != "" {
 		stream_constraints["fake"] = true
 	}
-	Info.Printf("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
+	logrus.Infof("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
 	return stream_constraints
 }
 
