@@ -91,7 +91,6 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
 			goto continueFlag
 		}
-		fmt.Println(roomValue[clientKey])
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
 			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
 			goto continueFlag
