@@ -67,7 +67,8 @@ func ClientMap(result interface{}, err error) (map[string]*Client, error) {
 		}
 		var client Client
 		if er := json.Unmarshal(value, client); er != nil {
-			return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!json error:%s", er))
+			return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!key:%s json:%s error:%s", string(key), string(value), er))
+			//return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!json error:%s", er))
 		} else {
 			m[string(key)] = &client
 		}

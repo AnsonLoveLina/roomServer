@@ -34,10 +34,10 @@ func getOtherClient(roomValue map[string]*Client, clientid string) *Client {
 func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
+	var roomValue map[string]*Client
 	var redisCon = RedisClient.Get()
 	defer redisCon.Close()
 	for i := 0; ; i++ {
-		var roomValue map[string]*Client
 		var error error
 		var roomState string
 		if result, err := redis.String(redisCon.Do("WATCH", roomid)); err != nil || result != "OK" {
@@ -45,7 +45,7 @@ func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 			goto continueFlag
 		}
 		if roomValue, error = ClientMap(redisCon.Do("HGETALL", roomid)); error != nil {
-			Error.Printf("command:HGETALL %s , error:%s", roomid, error)
+			Error.Printf("command:HGET %s , error:%s", roomid, error)
 			goto continueFlag
 		} else if roomValue == nil {
 			Warn.Printf("Unknow room:%s", roomid)
@@ -79,7 +79,7 @@ func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 			goto continueFlag
 		}
 	continueFlag:
-		Info.Printf("db cas cause bad client: %s to Room: %s message", clientKey, roomid)
+		Info.Printf("db cas cause bad client: %s to Room: %s leave", clientKey, roomid)
 		if i < errorBreakMax {
 			break
 		} else {

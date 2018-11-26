@@ -43,18 +43,17 @@ type joinResult struct {
 func AddClient2Room(roomid string, clientid string) (result joinResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
+	var roomValue map[string]*Client
 	var isInitiator = false
 	//切片保证容错性
 	var messages = make([]string, 0, roomMaxOccupancy)
 	//roomKey := fmt.Sprintf("%s/%s", request.URL.Host, roomid)
 	var occupancy int
-	var roomValue map[string]*Client
 	var room Room
 	var redisCon = RedisClient.Get()
 	defer redisCon.Close()
 	for i := 0; ; i++ {
 		var error error
-		var client string
 		if result, err := redis.String(redisCon.Do("WATCH", roomid)); err != nil || result != "OK" {
 			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, err)
 			goto continueFlag
@@ -79,27 +78,22 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 		} else {
 			isInitiator = false
 			var i = 0
-			for _, client := range roomValue {
-				messages = append(messages, client.Message...)
+			//get the other client's message
+			for _, otherClient := range roomValue {
+				messages = append(messages, otherClient.Message...)
 				i++
-				//是否应该clean client message
-				client.Message = make([]string, 0, 10)
+				//是否应该clean client's message
+				otherClient.Message = make([]string, 0, 10)
 			}
-			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
-				client = string(newClient[:])
-				room.Clients[clientKey] = NewClient(isInitiator)
-			} else {
-				Error.Println(error)
-				goto continueFlag
-			}
+			roomValue[clientKey] = NewClient(isInitiator)
 		}
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
 			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
 			goto continueFlag
 		}
-		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, client)); error != nil || result != "QUEUED" {
-			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, client, result, error)
+		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
+			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
 			goto continueFlag
 		}
 		if result, error := redisCon.Do("EXEC"); error != nil {
@@ -113,7 +107,7 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 		}
 
 	continueFlag:
-		Info.Printf("db cas cause bad client: %s to Room: %s message", clientKey, roomid)
+		Info.Printf("db cas cause bad client: %s to Room: %s join", clientKey, roomid)
 		if i < errorBreakMax {
 			break
 		} else {

@@ -58,10 +58,10 @@ func sendMessageToCollider(rw http.ResponseWriter, roomid, clientid string, requ
 func SaveMessageFromClient(roomid, clientid string, requestBody string) (result messageResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
+	var roomValue map[string]*Client
 	var redisCon = RedisClient.Get()
 	defer redisCon.Close()
 	for i := 0; ; i++ {
-		var roomValue map[string]*Client
 		var error error
 		if result, err := redis.String(redisCon.Do("WATCH", roomid)); err != nil || result != "OK" {
 			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, err)
@@ -79,17 +79,17 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 		} else if len(roomValue) >= roomMaxOccupancy {
 			return messageResult{"", false}
 		} else {
-			otherClient := roomValue[clientKey]
-			otherClient.Message = append(otherClient.Message, requestBody)
+			client := roomValue[clientKey]
+			client.Message = append(client.Message, requestBody)
 
-			delete(roomValue,clientKey)
+			roomValue[clientKey] = client
 		}
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
 			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
 			goto continueFlag
 		}
-		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, roomValue[clientKey])); error != nil || result != "QUEUED" {
+		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
 			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, roomValue[clientKey], result, error)
 			goto continueFlag
 		}
