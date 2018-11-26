@@ -90,7 +90,7 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 			goto continueFlag
 		}
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
-			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, roomValue[clientKey], result, error)
+			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
 			goto continueFlag
 		}
 		if result, error := redisCon.Do("EXEC"); error != nil {
@@ -122,5 +122,6 @@ func messageWriteResponse(rw http.ResponseWriter, result string) {
 		Error.Panicln(err)
 		response, _ = json.Marshal(map[string]interface{}{"result": err, "params": make(map[string]interface{})})
 	}
+	Debug.Printf("message response:%s", string(response))
 	rw.Write(response)
 }

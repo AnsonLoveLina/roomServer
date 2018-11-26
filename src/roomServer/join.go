@@ -23,8 +23,8 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 
 	result := AddClient2Room(roomid, clientid)
 	if result.Error != "" {
-		Error.Printf("Error adding client to Room: %s, room_state=%s",
-			result.Error, result.Room)
+		Error.Printf("Error adding client to Room: %s",
+			result.Error)
 		joinWriteResponse(rw, result.Error, make(map[string]interface{}), make([]string, 0))
 		return
 	}
@@ -74,7 +74,6 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 		}
 		if occupancy == 0 { //the first client of this Room
 			isInitiator = true
-			room = Room{Clients: map[string]*Client{clientKey: NewClient(isInitiator)}}
 		} else {
 			isInitiator = false
 			var i = 0
@@ -85,13 +84,14 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 				//是否应该clean client's message
 				otherClient.Message = make([]string, 0, 10)
 			}
-			roomValue[clientKey] = NewClient(isInitiator)
 		}
+		roomValue[clientKey] = NewClient(isInitiator)
 
 		if result, error := redis.String(redisCon.Do("MULTI")); error != nil || result != "OK" {
 			Error.Printf("command:MULTI , result:%s , error:%s", result, error)
 			goto continueFlag
 		}
+		fmt.Println(roomValue[clientKey])
 		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
 			Error.Printf("command:HSETNX %s %s %s , result:%s , error:%s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""), result, error)
 			goto continueFlag
@@ -223,7 +223,7 @@ func getRoomParameters(request *http.Request, requestJson map[string]interface{}
 	return params
 }
 func getVersionInfo() interface{} {
-	return map[string]interface{}{"gitHash": "", "time": "", "branch": ""}
+	return map[string]interface{}{"gitHash": nil, "time": nil, "branch": nil}
 }
 
 func makeMediaTrackConstraints(constraints string) (trackConstraints interface{}) {

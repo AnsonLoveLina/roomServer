@@ -10,11 +10,9 @@ import (
 )
 
 func Test(t *testing.T){
-	var x = map[string]*Client{"key":&Client{IsInitiator:true}}
-	client := x["key"]
-	client.IsInitiator=false
-	cc := MarshalNoError(x,[]byte{})
-	fmt.Println(string(cc))
+	a := map[string]interface{}{"gitHash": "", "time": "", "branch": ""}
+	fmt.Println(JsonByte(json.Marshal(a)))
+
 }
 
 func TestAddClient2Room(t *testing.T) {

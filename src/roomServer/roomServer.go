@@ -47,7 +47,7 @@ type Room struct {
 
 type Client struct {
 	IsInitiator bool     `json:"IsInitiator"`
-	Message     []string `json:"Message"`
+	Message     []string `json:"Message,omitempty"`
 }
 
 func ClientMap(result interface{}, err error) (map[string]*Client, error) {
@@ -66,7 +66,7 @@ func ClientMap(result interface{}, err error) (map[string]*Client, error) {
 			return nil, errors.New("ClientMap: ScanMap key not a bulk string value")
 		}
 		var client Client
-		if er := json.Unmarshal(value, client); er != nil {
+		if er := json.Unmarshal(value, &client); er != nil {
 			return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!key:%s json:%s error:%s", string(key), string(value), er))
 			//return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!json error:%s", er))
 		} else {
@@ -124,8 +124,8 @@ func getWssParameters(requestJson map[string]interface{}) (wssUrl string, wssPos
 		wssUrl = fmt.Sprintf("ws://%s/ws", wssHostPortPair)
 		wssPostUrl = fmt.Sprintf("http://%s", wssHostPortPair)
 	} else {
-		wssUrl = fmt.Sprintf("ws://%s/ws", wssHostPortPair)
-		wssPostUrl = fmt.Sprintf("http://%s", wssHostPortPair)
+		wssUrl = fmt.Sprintf("wss://%s/ws", wssHostPortPair)
+		wssPostUrl = fmt.Sprintf("https://%s", wssHostPortPair)
 	}
 	return
 }

@@ -17,7 +17,7 @@ func (rs *RoomServer) leaveRoomHandler(rw http.ResponseWriter, r *http.Request) 
 	clientid := mux.Vars(r)["clientid"]
 	result := RemoveClientFromRoom(roomid, clientid)
 	if result.error == "" {
-		Info.Printf("room:%s has state %s", result.error, result.roomState)
+		Info.Printf("room:%s has state %s", roomid, result.roomState)
 	}
 }
 

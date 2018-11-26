@@ -15,11 +15,11 @@ var (
 	WSS_INSTANCE_NAME_KEY               = "vm_name"
 	WSS_INSTANCE_ZONE_KEY               = "zone"
 	WSS_INSTANCES                       = []map[string]string{{
-		WSS_INSTANCE_HOST_KEY: "192.168.1.56:8089",
+		WSS_INSTANCE_HOST_KEY: "211.157.146.7:8812",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-a",
 	}, {
-		WSS_INSTANCE_HOST_KEY: "192.168.1.56:8089",
+		WSS_INSTANCE_HOST_KEY: "211.157.146.7:8812",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std-2",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-f",
 	}}
