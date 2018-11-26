@@ -17,8 +17,8 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 
 	var clientid = strconv.FormatInt(rand.Int63n(89999999)+10000000, 10)
 	requestJson, _ := GetRequestJson(r)
-	if requestJson["clientid"] != "" {
-		clientid = requestJson["clientid"]
+	if requestJson["clientid"] != nil {
+		clientid = Interface2string(requestJson["clientid"], "")
 	}
 
 	result := AddClient2Room(roomid, clientid)
@@ -42,7 +42,7 @@ type joinResult struct {
 
 var errorBreakMax = 10
 
-func AddClient2Room(roomid string, clientid string) (joinResult) {
+func AddClient2Room(roomid string, clientid string) (result joinResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
 	var isInitiator = false
@@ -50,7 +50,7 @@ func AddClient2Room(roomid string, clientid string) (joinResult) {
 	var messages = make([]string, 0, roomMaxOccupancy)
 	//roomKey := fmt.Sprintf("%s/%s", request.URL.Host, roomid)
 	var occupancy int
-	var roomValue map[string]string
+	var roomValue map[string]*Client
 	var room Room
 	var redisCon = RedisClient.Get()
 	defer redisCon.Close()
@@ -61,7 +61,7 @@ func AddClient2Room(roomid string, clientid string) (joinResult) {
 			Error.Printf("command:WATCH %s , result:%s , error:%s", roomid, result, err)
 			goto continueFlag
 		}
-		if roomValue, error = redis.StringMap(redisCon.Do("HGETALL", roomid)); error != nil {
+		if roomValue, error = ClientMap(redisCon.Do("HGETALL", roomid)); error != nil {
 			Error.Printf("command:HGETALL %s , error:%s", roomid, error)
 			goto continueFlag
 		}
@@ -72,32 +72,24 @@ func AddClient2Room(roomid string, clientid string) (joinResult) {
 		if occupancy >= roomMaxOccupancy {
 			return joinResult{Error: roomFull.getString()}
 		}
-		if value := roomValue[clientKey]; value != "" {
+		if value := roomValue[clientKey]; value != nil {
 			return joinResult{Error: duplicateClient.getString()}
 		}
 		if occupancy == 0 { //the first client of this Room
 			isInitiator = true
-			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
-				client = string(newClient[:])
-				room = Room{Clients: map[string]string{clientKey: client}}
-			} else {
-				Error.Printf("error:%s",error)
-				goto continueFlag
-			}
+			room = Room{Clients: map[string]*Client{clientKey: NewClient(isInitiator)}}
 		} else {
 			isInitiator = false
 			var i = 0
-			for _, clientJson := range roomValue {
-				var otherClient Client
-				json.Unmarshal([]byte(clientJson), otherClient)
-				messages = append(messages, otherClient.Message...)
+			for _, client := range roomValue {
+				messages = append(messages, client.Message...)
 				i++
 				//是否应该clean client message
-				otherClient.Message = make([]string, 0, 10)
+				client.Message = make([]string, 0, 10)
 			}
 			if newClient, error := json.Marshal(NewClient(isInitiator)); error == nil {
 				client = string(newClient[:])
-				room.Clients[clientKey] = client
+				room.Clients[clientKey] = NewClient(isInitiator)
 			} else {
 				Error.Println(error)
 				goto continueFlag
@@ -116,7 +108,7 @@ func AddClient2Room(roomid string, clientid string) (joinResult) {
 			Error.Printf("command:EXEC , result:%d , error:%s", result, error)
 			goto continueFlag
 		} else if result != nil {
-			Info.Printf("success client: %s to Room: %s add , retries:%d!", clientKey, roomid,i)
+			Info.Printf("success client: %s to Room: %s add , retries:%d!", clientKey, roomid, i)
 			return joinResult{"", isInitiator, messages, room}
 		} else {
 			goto continueFlag
@@ -130,6 +122,7 @@ func AddClient2Room(roomid string, clientid string) (joinResult) {
 			continue
 		}
 	}
+	return
 }
 
 func joinWriteResponse(rw http.ResponseWriter, result string, params map[string]interface{}, messages []string) {
@@ -144,33 +137,25 @@ func joinWriteResponse(rw http.ResponseWriter, result string, params map[string]
 	rw.Write(response)
 }
 
-func getHdDefault(userAgent string) bool {
-	if strings.Contains(userAgent, "Android") || strings.Contains(userAgent, "Chrome") {
-		return false
-	}
-
-	return true
-}
-
-func getRoomParameters(request *http.Request, requestJson map[string]string, roomid string, clientid string, isInitiator interface{}) (map[string]interface{}) {
+func getRoomParameters(request *http.Request, requestJson map[string]interface{}, roomid string, clientid string, isInitiator interface{}) (map[string]interface{}) {
 	var warningMessages = make([]string, 0, 10)
 	var message string
 	userAgent := request.UserAgent()
-	iceTransports := requestJson["it"]
-	iceServerTransports := requestJson["tt"]
+	iceTransports := Interface2string(requestJson["it"], "")
+	iceServerTransports := Interface2string(requestJson["tt"], "")
 	var iceServerBaseUrl string
-	if requestJson["ts"] != "" {
-		iceServerBaseUrl = requestJson["ts"]
+	if requestJson["ts"] != nil {
+		iceServerBaseUrl = Interface2string(requestJson["ts"], "")
 	} else {
 		iceServerBaseUrl = ICE_SERVER_BASE_URL
 	}
 
-	audio := requestJson["audio"]
-	video := requestJson["video"]
+	audio := Interface2string(requestJson["audio"], "")
+	video := Interface2string(requestJson["video"], "")
 
-	firefoxFakeDevice := requestJson["firefox_fake_device"]
+	firefoxFakeDevice := Interface2string(requestJson["firefox_fake_device"], "")
 
-	hd := strings.ToLower(requestJson["hd"])
+	hd := strings.ToLower(Interface2string(requestJson["hd"], ""))
 
 	if hd != "" && video != "" {
 		message = "The \"hd\" parameter has overridden video=" + video
@@ -183,15 +168,15 @@ func getRoomParameters(request *http.Request, requestJson map[string]string, roo
 		video = "optional:minWidth=1280,optional:minHeight=720"
 	}
 
-	if requestJson["minre"] != "" || requestJson["maxre"] != "" {
+	if requestJson["minre"] != nil || requestJson["maxre"] != nil {
 		message = "The \"minre\" and \"maxre\" parameters are no longer supported. Use \"video\" instead."
 		Info.Println(message)
 		warningMessages = append(warningMessages, message)
 	}
 
-	dtls := requestJson["dtls"]
-	dscp := requestJson["dscp"]
-	ipv6 := requestJson["ipv6"]
+	dtls := Interface2string(requestJson["dtls"], "")
+	dscp := Interface2string(requestJson["dscp"], "")
+	ipv6 := Interface2string(requestJson["ipv6"], "")
 
 	var iceServerUrl = ""
 	if len(iceServerBaseUrl) > 0 {
@@ -247,23 +232,6 @@ func getRoomParameters(request *http.Request, requestJson map[string]string, roo
 }
 func getVersionInfo() interface{} {
 	return map[string]interface{}{"gitHash": "", "time": "", "branch": ""}
-}
-
-func getWssParameters(requestJson map[string]string) (wssUrl string, wssPostUrl string) {
-	wssHostPortPair := requestJson["wshpp"]
-	wssTls := requestJson["wstls"]
-	if wssHostPortPair == "" {
-		wssHostPortPair = WSS_INSTANCES[0][WSS_INSTANCE_HOST_KEY]
-	}
-
-	if wssTls == "false" {
-		wssUrl = fmt.Sprintf("ws://%s/ws", wssHostPortPair)
-		wssPostUrl = fmt.Sprintf("http://%s", wssHostPortPair)
-	} else {
-		wssUrl = fmt.Sprintf("wss://%s/ws", wssHostPortPair)
-		wssPostUrl = fmt.Sprintf("https://%s", wssHostPortPair)
-	}
-	return
 }
 
 func makeMediaTrackConstraints(constraints string) (trackConstraints interface{}) {
@@ -340,4 +308,12 @@ func makePcConfig(iceTransports string, iceServerOverride []interface{}) map[str
 		config["iceTransports"] = iceTransports
 	}
 	return config
+}
+
+func getHdDefault(userAgent string) bool {
+	if strings.Contains(userAgent, "Android") || strings.Contains(userAgent, "Chrome") {
+		return false
+	}
+
+	return true
 }

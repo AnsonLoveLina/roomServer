@@ -9,6 +9,8 @@ import (
 	"strings"
 	. "common"
 	"io/ioutil"
+	"errors"
+	"github.com/garyburd/redigo/redis"
 )
 
 type ResponseType int
@@ -38,12 +40,37 @@ func (resp ResponseType) getString() string {
 }
 
 type Room struct {
-	Clients map[string]string `json:"clients"`
+	Clients map[string]*Client `json:"clients"`
 }
 
 type Client struct {
-	IsInitiator bool   `json:"IsInitiator"`
+	IsInitiator bool     `json:"IsInitiator"`
 	Message     []string `json:"Message"`
+}
+
+func ClientMap(result interface{}, err error) (map[string]*Client, error) {
+	values, err := redis.Values(result, err)
+	if err != nil {
+		return nil, err
+	}
+	if len(values)%2 != 0 {
+		return nil, errors.New("ClientMap: StringMap expects even number of values result")
+	}
+	m := make(map[string]*Client, len(values)/2)
+	for i := 0; i < len(values); i += 2 {
+		key, okKey := values[i].([]byte)
+		value, okValue := values[i+1].([]byte)
+		if !okKey || !okValue {
+			return nil, errors.New("ClientMap: ScanMap key not a bulk string value")
+		}
+		var client Client
+		if er := json.Unmarshal(value, client); er != nil {
+			return nil, errors.New(fmt.Sprintf("ClientMap: json can not transform to Client!json error:%s", er))
+		} else {
+			m[string(key)] = &client
+		}
+	}
+	return m, nil
 }
 
 func NewClient(isInitiator bool) *Client {
@@ -51,7 +78,7 @@ func NewClient(isInitiator bool) *Client {
 }
 
 func NewRoom() *Room {
-	return &Room{Clients: make(map[string]string)}
+	return &Room{Clients: make(map[string]*Client)}
 }
 
 type RoomServer struct {
@@ -67,6 +94,7 @@ func (rs *RoomServer) Run(p int, tls bool) {
 	router.HandleFunc("/test/{roomid}", rs.test).Methods("POST")
 	router.HandleFunc("/join/{roomid}", rs.joinRoomHandler).Methods("POST")
 	router.HandleFunc("/message/{roomid}/{clientid}", rs.messageRoomHandler).Methods("POST")
+	router.HandleFunc("/leave/{roomid}/{clientid}", rs.leaveRoomHandler).Methods("POST")
 
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(p), router)
 }
@@ -82,15 +110,35 @@ func (rs *RoomServer) test(rw http.ResponseWriter, request *http.Request) {
 	fmt.Println(roomLink)
 }
 
-func GetRequestJson(r *http.Request) (map[string]string,string) {
-	body, _ := ioutil.ReadAll(r.Body)
-	requestJson := make(map[string]string)
-	r.Body.Close()
-	if err := json.Unmarshal(body, &requestJson); err == nil {
-		Info.Println(requestJson)
+func getWssParameters(requestJson map[string]interface{}) (wssUrl string, wssPostUrl string) {
+	wssHostPortPair := Interface2string(requestJson["wshpp"], "")
+	wssTls := Interface2string(requestJson["wstls"], "")
+	if wssHostPortPair == "" {
+		wssHostPortPair = WSS_INSTANCES[0][WSS_INSTANCE_HOST_KEY]
+	}
+
+	if wssTls == "false" {
+		wssUrl = fmt.Sprintf("ws://%s/ws", wssHostPortPair)
+		wssPostUrl = fmt.Sprintf("http://%s", wssHostPortPair)
 	} else {
-		Error.Println(err)
+		wssUrl = fmt.Sprintf("ws://%s/ws", wssHostPortPair)
+		wssPostUrl = fmt.Sprintf("http://%s", wssHostPortPair)
+	}
+	return
+}
+
+func GetRequestJson(r *http.Request) (map[string]interface{}, string) {
+	body, _ := ioutil.ReadAll(r.Body)
+	if string(body) == "" {
+		return nil, ""
+	}
+	requestJson := make(map[string]interface{})
+	r.Body.Close()
+	if err := json.Unmarshal(body, &requestJson); err != nil {
+		Error.Printf("json:%s unmarshal error:%s", string(body), err)
+		//} else {
+		//	Info.Println(requestJson)
 	}
 	//todo body's encode
-	return requestJson,string(body)
+	return requestJson, string(body)
 }

@@ -6,21 +6,56 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/garyburd/redigo/redis"
 	"encoding/json"
+	"fmt"
+	"strings"
 )
-
-func (rs *RoomServer) messageRoomHandler(rw http.ResponseWriter, r *http.Request) {
-	_, requestBody := GetRequestJson(r)
-	roomid := mux.Vars(r)["roomid"]
-	clientid := mux.Vars(r)["clientid"]
-	saveMessageFromClient(roomid, clientid, requestBody)
-}
 
 type messageResult struct {
 	Error string `json:"error"`
 	Saved bool   `json:"saved"`
 }
 
-func saveMessageFromClient(roomid, clientid string, requestBody string) (messageResult) {
+func (rs *RoomServer) messageRoomHandler(rw http.ResponseWriter, r *http.Request) {
+	requestJson, requestBody := GetRequestJson(r)
+	roomid := mux.Vars(r)["roomid"]
+	clientid := mux.Vars(r)["clientid"]
+	result := SaveMessageFromClient(roomid, clientid, requestBody)
+	if result.Error != "" {
+		messageWriteResponse(rw, result.Error)
+	}
+
+	if ! result.Saved {
+		sendMessageToCollider(rw, roomid, clientid, requestJson, requestBody)
+	} else {
+		messageWriteResponse(rw, RESPONSE_SUCCESS)
+	}
+}
+
+func sendMessageToCollider(rw http.ResponseWriter, roomid, clientid string, requestJson map[string]interface{}, requestBody string) {
+	Info.Printf("Forwarding message to collider for room %s client %s", roomid, clientid)
+	_, wssPostUrl := getWssParameters(requestJson)
+	url := wssPostUrl + "/" + roomid + "/" + clientid
+	req, err := http.NewRequest("POST", url, strings.NewReader(requestBody))
+	if err != nil {
+		Error.Printf("Failed to send message to collider: %s", err)
+		return
+	}
+	client := &http.Client{}
+	response, err := client.Do(req)
+	if err != nil {
+		Error.Printf("Failed to send message to collider: %s", err)
+		return
+	}
+
+	if response.StatusCode != 200 {
+		Error.Printf("Failed to send message to collider: %d", response.StatusCode)
+		return
+	}
+
+	messageWriteResponse(rw, RESPONSE_SUCCESS)
+}
+
+func SaveMessageFromClient(roomid, clientid string, requestBody string) (result messageResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
 	var redisCon = RedisClient.Get()
@@ -68,18 +103,30 @@ func saveMessageFromClient(roomid, clientid string, requestBody string) (message
 			Error.Printf("command:EXEC , result:%d , error:%s", result, error)
 			goto continueFlag
 		} else if result != nil {
-			Info.Printf("success client: %s to Room: %s add,retries:%d!", clientKey, roomid,i)
+			Info.Printf("success client: %s to Room: %s add,retries:%d!", clientKey, roomid, i)
 			return messageResult{"", true}
 		} else {
 			goto continueFlag
 		}
 
-		continueFlag:
-			Info.Printf("db cas cause bad client: %s to Room: %s message", clientKey, roomid)
+	continueFlag:
+		Info.Printf("db cas cause bad client: %s to Room: %s message", clientKey, roomid)
 		if i < errorBreakMax {
 			break
 		} else {
 			continue
 		}
 	}
+	return
+}
+
+func messageWriteResponse(rw http.ResponseWriter, result string) {
+	responseObj := map[string]interface{}{"result": result}
+	response, error := json.Marshal(responseObj)
+	if error != nil {
+		err := fmt.Sprintf("json marshal error %s result:%s", error.Error(), result)
+		Error.Panicln(err)
+		response, _ = json.Marshal(map[string]interface{}{"result": err, "params": make(map[string]interface{})})
+	}
+	rw.Write(response)
 }
