@@ -35,6 +35,7 @@ func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid
 	var redisCon = RedisClient.Get()
+	defer redisCon.Close()
 	for i := 0; ; i++ {
 		var roomValue map[string]*Client
 		var error error

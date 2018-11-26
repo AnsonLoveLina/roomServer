@@ -40,8 +40,6 @@ type joinResult struct {
 	Room        Room     `json:"room_state"`
 }
 
-var errorBreakMax = 10
-
 func AddClient2Room(roomid string, clientid string) (result joinResult) {
 	//先用clientid作为redis的clientKey
 	var clientKey = clientid

@@ -17,6 +17,8 @@ type ResponseType int
 
 const roomMaxOccupancy = 2
 
+const errorBreakMax = 10
+
 const (
 	roomFull        ResponseType = 1
 	duplicateClient ResponseType = 2
