@@ -117,7 +117,7 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 }
 
 func joinWriteResponse(rw http.ResponseWriter, result string, params map[string]interface{}, messages []string) {
-	params["Messages"] = messages
+	params["messages"] = messages
 	responseObj := map[string]interface{}{"result": result, "params": params}
 	response, error := json.Marshal(responseObj)
 	if error != nil {
