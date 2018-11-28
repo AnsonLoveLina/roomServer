@@ -74,7 +74,7 @@ func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
 			goto continueFlag
 		} else if result != nil {
-			logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid, "retries": i}).Info("client success leave to the room")
+			logrus.WithFields(logrus.Fields{"result": result, "client": clientKey, "Room": roomid, "retries": i}).Info("client success leave to the room")
 			return leaveResult{"", roomState}
 		} else {
 			goto continueFlag

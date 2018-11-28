@@ -90,15 +90,15 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:MULTI")
 			goto continueFlag
 		}
-		if result, error := redis.String(redisCon.Do("HSETNX", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
-			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Errorf("command:HSETNX %s %s %s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))
+		if result, error := redis.String(redisCon.Do("HSET", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))); error != nil || result != "QUEUED" {
+			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Errorf("command:HSET %s %s %s", roomid, clientKey, MarshalNoErrorStr(*roomValue[clientKey], ""))
 			goto continueFlag
 		}
-		if result, error := redisCon.Do("EXEC"); error != nil {
+		if result, error := redis.Ints(redisCon.Do("EXEC")); error != nil {
 			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
 			goto continueFlag
-		} else if result != nil {
-			logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid, "retries": i}).Info("client success message to the room")
+		} else if result != nil && result[0] == 0 {
+			logrus.WithFields(logrus.Fields{"result":result,"client": clientKey, "Room": roomid, "retries": i}).Info("client success message to the room")
 			return messageResult{"", true}
 		} else {
 			goto continueFlag
