@@ -99,8 +99,16 @@ func (rs *RoomServer) Run(p int, tls bool) {
 	router.HandleFunc("/join/{roomid}", rs.joinRoomHandler).Methods("POST")
 	router.HandleFunc("/message/{roomid}/{clientid}", rs.messageRoomHandler).Methods("POST")
 	router.HandleFunc("/leave/{roomid}/{clientid}", rs.leaveRoomHandler).Methods("POST")
+	router.HandleFunc("/iceconfig", rs.iceConfig).Methods("POST")
 
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(p), router)
+}
+
+//todo iceservers的分布式
+func (rs *RoomServer) iceConfig(rw http.ResponseWriter, request *http.Request) {
+	serverKey := request.URL.Query().Get("key")
+	logrus.WithFields(logrus.Fields{"serverKey": serverKey}).Info("iceConfig receive the request")
+	rw.Write([]byte(DEFAULT_ICESERVERS))
 }
 
 func (rs *RoomServer) test(rw http.ResponseWriter, request *http.Request) {
