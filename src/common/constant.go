@@ -28,11 +28,11 @@ var (
 	RESPONSE_UNKNOWN_CLIENT = "UNKNOWN_CLIENT"
 	RESPONSE_SUCCESS        = "SUCCESS"
 
-	DEFAULT_ICESERVERS = `"{iceServers":
+	DEFAULT_ICESERVERS = `{"iceServers":
 							[
 								{"urls": ["turn:numb.viagenie.ca"],"username": "webrtc@live.com","credential": "muazkh"},
 								{"urls": ["stun:stun.l.google.com:19302"]}
-							]}"`
+							]}`
 )
 
 func init() {
