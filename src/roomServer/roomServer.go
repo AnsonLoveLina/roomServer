@@ -100,6 +100,7 @@ func (rs *RoomServer) Run(p int, tls bool) {
 	router.HandleFunc("/message/{roomid}/{clientid}", rs.messageRoomHandler).Methods("POST")
 	router.HandleFunc("/leave/{roomid}/{clientid}", rs.leaveRoomHandler).Methods("POST")
 	router.HandleFunc("/iceconfig", rs.iceConfig).Methods("POST")
+	router.HandleFunc("/params", rs.paramRoomHandler).Methods("GET")
 
 	http.ListenAndServe("0.0.0.0:"+strconv.Itoa(p), router)
 }
