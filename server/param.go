@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	. "common"
+	. "roomServer/common"
 )
 
 func (rs *RoomServer) paramRoomHandler(rw http.ResponseWriter, r *http.Request) {

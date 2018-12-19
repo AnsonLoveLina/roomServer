@@ -2,7 +2,7 @@ package server
 
 import (
 	"net/http"
-	. "common"
+	. "roomServer/common"
 	"github.com/gorilla/mux"
 	"github.com/garyburd/redigo/redis"
 	"encoding/json"

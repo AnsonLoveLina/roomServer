@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	. "server"
+	. "roomServer/server"
 	log "github.com/sirupsen/logrus"
 	"github.com/mattn/go-colorable"
 )

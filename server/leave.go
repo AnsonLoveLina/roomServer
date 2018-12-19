@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 	"github.com/gorilla/mux"
-	. "common"
+	. "roomServer/common"
 	"github.com/garyburd/redigo/redis"
 	"github.com/sirupsen/logrus"
 )

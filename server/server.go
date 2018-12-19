@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"encoding/json"
 	"strings"
-	. "common"
+	. "roomServer/common"
 	"io/ioutil"
 	"errors"
 	"github.com/garyburd/redigo/redis"

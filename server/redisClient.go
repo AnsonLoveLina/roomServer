@@ -2,7 +2,7 @@ package server
 
 import (
 	"github.com/garyburd/redigo/redis"
-	. "common"
+	. "roomServer/common"
 	"time"
 )
 
