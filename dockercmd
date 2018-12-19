@@ -1,1 +1,2 @@
+docker build -t goroomserver .
 docker run --name goroomserver -p 8080:8080 -d goroomserver -tls=false
