@@ -1,6 +1,6 @@
 FROM golang
 WORKDIR /go/src
-ADD . ./roomServer
+ADD ./src .
 RUN go get -u github.com/gpmgo/gopm
 #RUN gopm get -g golang.org/x/tools
 RUN gopm get -g golang.org/x/crypto

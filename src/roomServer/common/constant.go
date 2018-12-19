@@ -5,7 +5,7 @@ import "os"
 var (
 	NIL_DEFAULT_PARAM                   = "none"
 	RedisProtocol                       = "tcp"
-	RedisHost                           = "192.168.1.95"
+	RedisHost                           = "127.0.0.1"
 	RedisPort                           = "6379"
 	ICE_SERVER_BASE_URL                 = "http://192.168.1.45:8080"
 	ICE_SERVER_URL_TEMP                 = "%s/iceconfig?key=%s"
