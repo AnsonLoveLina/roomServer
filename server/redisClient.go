@@ -1,4 +1,4 @@
-package roomServer
+package server
 
 import (
 	"github.com/garyburd/redigo/redis"

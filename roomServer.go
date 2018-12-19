@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	. "roomServer"
+	. "server"
 	log "github.com/sirupsen/logrus"
 	"github.com/mattn/go-colorable"
 )
@@ -28,7 +28,7 @@ func init() {
 
 func main() {
 	flag.Parse()
-	log.Infof("Starting roomServer: tls = %t, port = %d", *tls, *port)
+	log.Infof("Starting server: tls = %t, port = %d", *tls, *port)
 	roomServer := NewRoomServer()
 	roomServer.Run(*port, *tls)
 }
