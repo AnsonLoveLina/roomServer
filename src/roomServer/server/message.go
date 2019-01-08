@@ -78,6 +78,7 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 			logrus.WithFields(logrus.Fields{"clientKey": clientKey}).Warn("Unknow client")
 			return messageResult{RESPONSE_UNKNOWN_CLIENT, false}
 		} else if len(roomValue) >= roomMaxOccupancy {
+			logrus.WithFields(logrus.Fields{"clientKey": clientKey}).Warnf("roomOccupancy:%d>=roomMaxOccupancy:%d",len(roomValue),roomMaxOccupancy)
 			return messageResult{"", false}
 		} else {
 			client := roomValue[clientKey]
