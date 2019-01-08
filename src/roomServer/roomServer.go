@@ -8,11 +8,11 @@ import (
 	. "roomServer/server"
 )
 
-var tls = flag.Bool("tls", true, "whether TLS is used")
+var tls = flag.Bool("tls", false, "whether TLS is used")
 var port = flag.Int("port", 8080, "The TCP port that the server listens on")
-var redisHost = flag.String("redisHost", "127.0.0.1", "The redisHost that the server used")
-var iceServerUrl = flag.String("iceServerUrl", "http://192.168.1.21:8080", "The iceServerUrl that the server used")
-var wsHost = flag.String("wsHost", "192.168.1.21:8089", "The wsHost that the server used")
+var redisHost = flag.String("redisHost", RedisHost, "The redisHost that the server used")
+var iceServerUrl = flag.String("iceServerUrl", ICE_SERVER_BASE_URL, "The iceServerUrl that the server used")
+var wsHost = flag.String("wsHost", WSS_INSTANCES[0][WSS_INSTANCE_HOST_KEY], "The wsHost that the server used")
 
 func init() {
 	// Log as JSON instead of the default ASCII formatter.
@@ -27,7 +27,7 @@ func init() {
 	//log.SetReportCaller(true)
 
 	// Only log the warning severity or above.
-	log.SetLevel(log.InfoLevel)
+	log.SetLevel(log.DebugLevel)
 }
 
 func main() {

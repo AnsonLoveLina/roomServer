@@ -36,7 +36,7 @@ func (rs *RoomServer) joinRoomHandler(rw http.ResponseWriter, r *http.Request) {
 type joinResult struct {
 	Error       string   `json:"error"`
 	IsInitiator bool     `json:"IsInitiator"`
-	Messages    []string `json:"Messages"`
+	Messages    []string `json:"Messages,omitempty"`
 	Room        Room     `json:"room_state"`
 }
 
@@ -96,7 +96,7 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 			goto continueFlag
 		}
 		if result, error := redis.Ints(redisCon.Do("EXEC")); error != nil {
-			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
+			logrus.WithFields(logrus.Fields{"result": result, "error": error, "key": roomid, "field": clientKey, "value": MarshalNoErrorStr(*roomValue[clientKey], "")}).Error("command:EXEC")
 			goto continueFlag
 		} else if result != nil && result[0] == 1 {
 			logrus.WithFields(logrus.Fields{"result":result,"client": clientKey, "Room": roomid, "retries": i}).Info("client success join to the room")
@@ -108,9 +108,9 @@ func AddClient2Room(roomid string, clientid string) (result joinResult) {
 	continueFlag:
 		logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid}).Info("db cas cause client bad join to the room")
 		if i < errorBreakMax {
-			break
-		} else {
 			continue
+		} else {
+			break
 		}
 	}
 	return
@@ -263,7 +263,7 @@ func makeMediaStreamConstraints(audio string, video string, firefoxFakeDevice st
 	if firefoxFakeDevice != "" {
 		stream_constraints["fake"] = true
 	}
-	logrus.Infof("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
+	logrus.Debugf("Applying media constraints: %s", JsonByte(json.Marshal(stream_constraints)))
 	return stream_constraints
 }
 

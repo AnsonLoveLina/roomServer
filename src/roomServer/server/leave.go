@@ -82,9 +82,9 @@ func RemoveClientFromRoom(roomid string, clientid string) (result leaveResult) {
 	continueFlag:
 		logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid}).Info("db cas cause client bad leave to the room")
 		if i < errorBreakMax {
-			break
-		} else {
 			continue
+		} else {
+			break
 		}
 	}
 	return

@@ -5,9 +5,9 @@ import "os"
 var (
 	NIL_DEFAULT_PARAM                   = "none"
 	RedisProtocol                       = "tcp"
-	RedisHost                           = "127.0.0.1"
+	RedisHost                           = "192.168.1.95"
 	RedisPort                           = "6379"
-	ICE_SERVER_BASE_URL                 = "http://192.168.1.45:8080"
+	ICE_SERVER_BASE_URL                 = "http://192.168.1.11:8080"
 	ICE_SERVER_URL_TEMP                 = "%s/iceconfig?key=%s"
 	ICE_SERVER_API_KEY                  = os.ExpandEnv("$ICE_SERVER_API_KEY")
 	ICE_SERVER_OVERRIDE   []interface{} = nil
@@ -15,11 +15,11 @@ var (
 	WSS_INSTANCE_NAME_KEY               = "vm_name"
 	WSS_INSTANCE_ZONE_KEY               = "zone"
 	WSS_INSTANCES                       = []map[string]string{{
-		WSS_INSTANCE_HOST_KEY: "192.168.1.45:8089",
+		WSS_INSTANCE_HOST_KEY: "192.168.1.11:8089",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-a",
 	}, {
-		WSS_INSTANCE_HOST_KEY: "192.168.1.45:8089",
+		WSS_INSTANCE_HOST_KEY: "192.168.1.11:8089",
 		WSS_INSTANCE_NAME_KEY: "wsserver-std-2",
 		WSS_INSTANCE_ZONE_KEY: "us-central1-f",
 	}}

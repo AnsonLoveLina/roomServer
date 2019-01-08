@@ -1,14 +1,14 @@
 package server
 
 import (
-	"net/http"
-	. "roomServer/common"
-	"github.com/gorilla/mux"
-	"github.com/garyburd/redigo/redis"
 	"encoding/json"
 	"fmt"
-	"strings"
+	"github.com/garyburd/redigo/redis"
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
+	"net/http"
+	. "roomServer/common"
+	"strings"
 )
 
 type messageResult struct {
@@ -95,10 +95,10 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 			goto continueFlag
 		}
 		if result, error := redis.Ints(redisCon.Do("EXEC")); error != nil {
-			logrus.WithFields(logrus.Fields{"result": result, "error": error}).Error("command:EXEC")
+			logrus.WithFields(logrus.Fields{"result": result, "error": error, "key": roomid, "field": clientKey, "value": MarshalNoErrorStr(*roomValue[clientKey], "")}).Error("command:EXEC")
 			goto continueFlag
 		} else if result != nil && result[0] == 0 {
-			logrus.WithFields(logrus.Fields{"result":result,"client": clientKey, "Room": roomid, "retries": i}).Info("client success message to the room")
+			logrus.WithFields(logrus.Fields{"result": result, "client": clientKey, "Room": roomid, "retries": i}).Info("client success message to the room")
 			return messageResult{"", true}
 		} else {
 			goto continueFlag
@@ -107,9 +107,9 @@ func SaveMessageFromClient(roomid, clientid string, requestBody string) (result 
 	continueFlag:
 		logrus.WithFields(logrus.Fields{"client": clientKey, "Room": roomid}).Info("db cas cause client bad message to the room")
 		if i < errorBreakMax {
-			break
-		} else {
 			continue
+		} else {
+			break
 		}
 	}
 	return
