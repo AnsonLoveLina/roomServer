@@ -1,0 +1,17 @@
+version: '2.2'
+services:
+  roomserver:
+    build: .
+    ports:
+      - 8080:8080
+    volumes:
+      - ./../src/roomServer:/go/src/roomServer
+      - ./../src/tls:/go/src/tls
+      - ./../install.sh:/install.sh
+    links:
+      - redis
+    depends_on:
+      - redis
+    command: /install.sh
+  redis:
+    image: redis
